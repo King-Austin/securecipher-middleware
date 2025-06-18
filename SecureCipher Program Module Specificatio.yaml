@@ -1,0 +1,281 @@
+
+SecureCipher Program Module Specification
+1. User Onboarding & Authentication Module
+📌 Purpose:
+Register users, generate/store ECDSA public keys, link to virtual  accounts, and authenticate users securely.
+🔁 Core Functions:
+    • - register_user()
+    • - generate_keypair_client_side()
+    • - store_public_key()
+    • - authenticate_user()
+📥 Inputs:
+    • - User details: name, phone, email, BVN, NIN
+    • - Public key from WebCrypto API
+📤 Outputs:
+    • - Registered user with virtual account
+    • - Public key stored in DB
+    • - Onboarding success message
+🔗 Dependencies:
+    • - crypto_engine for key validation
+    • - client_services for WebCrypto integration
+🔐 Security Considerations:
+    • - Public key integrity verification nbdf
+    • - Private key never leaves user device
+2. Crypto Engine Module
+📌 Purpose:
+Perform all cryptographic operations: signing, verification, encryption, decryption, and key derivation.
+🔁 Core Functions:
+    • - ecdsa_sign(message, private_key)
+    • - ecdsa_verify(sig, message, public_key)
+    • - aes256gcm_encrypt(data, key)
+    • - aes256gcm_decrypt(ciphertext, key)
+    • - derive_keys(shared_secret) → HKDF-SHA384
+    • - perform_ecdhe() using secp384r1
+📥 Inputs:
+    • - Raw transactions, user signatures, shared secrets
+📤 Outputs:
+    • - Cryptographic artifacts: Sig_P, Sig_S, encrypted payloads
+🔗 Dependencies:
+    • - OpenSSL 3
+    • - transactions, users
+🔐 Security Considerations:
+    • - Keys zeroized after use
+    • - Strong entropy 
+3. Transaction Processing Module
+📌 Purpose:
+Handle transaction validation, signing, encryption, and communication with Bank API.
+🔁 Core Functions:
+    • - process_transaction(tx, sig_P)
+    • - validate_and_sign(tx, sig_P)
+    • - encrypt_and_send_to_bank()
+    • - handle_response_from_bank()
+📥 Inputs:
+    • - Signed transaction from Paul (P)
+    • - Public key Q_P, Signature Sig_P
+📤 Outputs:
+    • - [Tx, Sig_P, Q_P, Sig_S, Q_S] to Bank API
+    • - Response to Timo after decryption
+🔗 Dependencies:
+    • - users, crypto_engine, audit_log
+🔐 Security Considerations:
+    • - Dual signature enforcement
+    • - Encrypted payload transmission
+    • - Integrity checks
+4. TLS Middleware Module
+📌 Purpose:
+Enforce TLS 1.3-only connections, apply security headers and cipher suite validation.
+🔁 Core Functions:
+    • - enforce_tls13_only(request)
+    • - inject_security_headers(response)
+    • - validate_tls_handshake()
+📥 Inputs:
+    • - HTTP/HTTPS requests
+📤 Outputs:
+    • - Secured and validated TLS connections
+🔗 Dependencies:
+    • - Django middleware, Nginx (optional)
+🔐 Security Considerations:
+    • - TLS 1.3 with ECDHE
+    • - Cipher suite: ECDHE-ECDSA-AES256-GCM-SHA384 only
+5. Audit Log Module
+📌 Purpose:
+Record cryptographic events for accountability and non-repudiation.
+🔁 Core Functions:
+    • - log_event(event_type, user_id, timestamp)
+    • - retrieve_log(user_id)
+    • - hash_chain_append(log)
+📥 Inputs:
+    • - Signature verifications, encryption events
+📤 Outputs:
+    • - Tamper-evident logs
+🔗 Dependencies:
+    • - crypto_engine, all transaction modules
+🔐 Security Considerations:
+    • - Append-only logs
+    • - Each log entry hashed and chained for integrity
+6. Client Services Module
+📌 Purpose:
+Perform cryptographic operations on the client-side during onboarding.
+🔁 Core Functions:
+    • - generate_ecdsa_keypair()
+    • - export_public_key()
+    • - sign_transaction(tx)
+📥 Inputs:
+    • - User-supplied form data
+📤 Outputs:
+    • - Public key to backend
+    • - Signed transaction
+🔗 Dependencies:
+    • - WebCrypto API, JavaScript frontend, users and transactions backend APIs
+🔐 Security Considerations:
+    • - Private key securely stored (IndexedDB or encrypted localStorage)
+    • - Never transmitted
+7. KeyManager Module
+📌 Purpose:
+Securely manage the lifecycle of cryptographic keys used in SecureCipher.
+🔁 Core Functions:
+    • - store_public_key(user_id, public_key)
+    • - retrieve_public_key(user_id)
+    • - rotate_keys(user_id)
+    • - revoke_key(user_id)
+    • - export_public_key()
+    • - derive_shared_secret(Q_peer, d_self)
+    • - derive_session_key(shared_secret)
+📥 Inputs:
+    • - Curve parameters (e.g., secp384r1)
+    • - User identifier
+    • - Peer public key (for ECDHE)
+    • - Private key (if server-side managed)
+📤 Outputs:
+    • - ECDSA and ECDHE key pairs
+    • - Shared secrets
+    • - Derived AES keys
+    • - Revocation status
+🔗 Dependencies:
+    • - crypto_engine, users, secure storage, client_services
+🔐 Security Considerations:
+    • - Store private keys only on client or HSM
+    • - Key zeroization
+    • - Enforce rotation policies
+    • - Access control
+    • - Revocation list enforcement
+    • - Log all key events
+🔁 Integration Points:
+    • - users - Link keys to identity
+    • - transactions - Provide keys for Tx
+    • - crypto_engine - Use keys for ops
+    • - tls_middleware - Provide ephemeral keys
+    • - audit_log - Log key events
+    • - client_services - Support WebCrypto keygen
+
+
+
+# User Management
+GET  /api/users/ping/
+POST /api/users/register/
+
+# Cryptography
+POST /api/crypto/generate-keys/
+POST /api/crypto/validate-signature/
+GET  /api/crypto/test-crypto/
+
+# Transactions
+POST /api/transactions/create/
+POST /api/transactions/process/
+GET  /api/transactions/history/
+GET  /api/transactions/<id>/
+
+# Audit Logs
+GET  /api/audit/logs/
+GET  /api/audit/user-logs/<user_id>/
+POST /api/audit/event/
+
+# TLS Middleware
+GET  /api/tls/verify/
+GET  /api/tls/status/
+
+# JWT Authentication
+POST /api/token/
+POST /api/token/refresh/
+
+
+
+
+
+
+Absolutely! Here’s a simple, beginner-friendly explanation of how the SecureCipher project works in real life — imagine you're explaining it to someone new to web or security development.
+🧩 Imagine This Scenario
+
+Paul is a fintech developer. He wants to securely send transaction details from his app (like money transfers or identity confirmations) to a banking service. But he wants:
+
+    💬 No one to intercept or tamper with the data
+
+    🧾 Proof that Paul actually sent it
+
+    🔐 A system that even he himself can’t tamper with after sending
+
+That’s where SecureCipher comes in. It's like a secure “middleman” system between the user and the bank.
+🔐 What SecureCipher Does
+
+    “SecureCipher is like a digital post office that wraps your letter in a locked box, seals it with a digital signature, and guarantees it hasn’t been opened or faked.”
+
+Let’s break it down...
+🧑‍💻 1. User Onboarding (Getting Started)
+
+    A user (like Paul) goes to the web app.
+
+    SecureCipher helps them generate a pair of digital keys in the browser (public & private).
+
+    It stores only the public key in the database.
+
+    The private key stays in their browser — like a personal signature stamp.
+
+🧠 Think of the private key as a digital pen that only Paul can use to sign things.
+🔐 2. Sending a Secure Transaction
+
+    Paul creates a transaction (e.g., “send ₦10,000 to Janet”).
+
+    SecureCipher does three things:
+
+        Signs the message with Paul’s private key (to prove it came from him)
+
+        Encrypts the message with strong encryption (so no one else can read it)
+
+        Sends it to the SecureCipher backend
+
+🔁 SecureCipher also adds its own signature to confirm that it has seen and approved the transaction (dual-signing).
+🏦 3. Forwarding to the Bank API
+
+    The signed and encrypted transaction is then forwarded to the bank's API.
+
+    If the bank replies (e.g., “success”), SecureCipher decrypts the reply and returns it to the user.
+
+🛡️ 4. Security Throughout the Journey
+
+    All communication is over TLS 1.3, the latest web security protocol.
+
+    Every action (e.g., “Paul signed transaction”) is logged in a tamper-proof log.
+
+    Even if someone hacks into the system, they can’t fake the logs or keys — they’re cryptographically protected.
+
+📋 5. Why It’s Special
+🔐 Security Feature	What it does
+ECDSA Signatures	Proves identity (like a digital signature)
+AES-GCM Encryption	Keeps data private during transfer
+TLS 1.3 Enforcement	Prevents Man-in-the-middle attacks
+Public Key Infrastructure	Helps verify identity without passwords
+Audit Logs	Prove what happened, when, and by whom
+📦 In Simple Words:
+
+    SecureCipher lets you send highly secure, verified transactions over the internet, and makes sure no one can lie about what happened.
+
+Would you like me to create a one-page PDF or client-friendly pitch using this explanation — to help them grasp it instantly during a demo?
+
+# Authentication
+POST /api/token/                     # Get JWT token
+POST /api/token/refresh/             # Refresh JWT token
+
+# User Management
+GET  /api/users/ping/                # Health check
+POST /api/users/register/            # User registration
+POST /api/users/authenticate/        # ECDSA authentication
+
+# Cryptography Operations
+POST /api/crypto/generate-keys/      # Generate server keypair
+POST /api/crypto/validate-signature/ # Validate ECDSA signature
+GET  /api/crypto/test-crypto/        # Test crypto engine
+
+# Transaction Processing
+POST /api/transactions/create/       # Create transaction
+POST /api/transactions/process/      # Process with dual signatures
+GET  /api/transactions/history/      # Transaction history
+GET  /api/transactions/<id>/         # Transaction details
+
+# Audit Logging
+GET  /api/audit/logs/                # All audit logs
+GET  /api/audit/user-logs/<id>/      # User-specific logs
+POST /api/audit/event/               # Log security event
+
+# TLS Middleware
+GET  /api/tls/verify/                # Verify TLS status
+GET  /api/tls/status/                # TLS middleware status

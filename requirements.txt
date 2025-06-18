@@ -1,0 +1,16 @@
+# Core Dependencies for High-Security Banking Transactions
+
+# Django Framework
+Django==5.2.2
+djangorestframework==3.15.2
+
+# Cryptographic Libraries - Foundation of Security
+cryptography==43.0.1          # Industry-standard crypto library with ECDSA support
+pycryptodome==3.19.0          # Additional crypto algorithms and utilities
+
+# Additional Dependencies for SecureCipher Integration
+django-cors-headers==4.3.1    # CORS handling for frontend integration
+python-decouple==3.8          # Environment variable management
+pyjwt==2.8.0                  # JWT handling for tokens
+python-dateutil==2.8.2        # Date/time utilities for timestamp validation
+
