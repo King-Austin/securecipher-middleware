@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Card",
+  "type": "object",
+  "properties": {
+    "card_number": { "type": "string" },
+    "card_type": { "type": "string" },
+    "card_brand": { "type": "string" },
+    "expiry_date": { "type": "string" },
+    "status": { "type": "string" }
+  },
+  "required": ["card_number", "card_type", "card_brand", "expiry_date", "status"]
+}

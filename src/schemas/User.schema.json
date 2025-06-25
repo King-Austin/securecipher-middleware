@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "User",
+  "type": "object",
+  "properties": {
+    "full_name": { "type": "string" },
+    "email": { "type": "string", "format": "email" },
+    "phone": { "type": "string" },
+    "bvn": { "type": "string" },
+    "nin": { "type": "string" },
+    "date_of_birth": { "type": "string", "format": "date" },
+    "address": { "type": "string" },
+    "occupation": { "type": "string" },
+    "account_number": { "type": "string" },
+    "account_balance": { "type": "number" },
+    "profile_picture": { "type": "string" },
+    "public_key": { "type": "string" },
+    "pin_set": { "type": "boolean" },
+    "notification_preferences": { "type": "object" },
+    "security_settings": { "type": "object" }
+  },
+  "required": [
+    "full_name", "email", "phone", "bvn", "nin", "date_of_birth", "address", "occupation", "account_number", "account_balance", "public_key", "pin_set"
+  ]
+}

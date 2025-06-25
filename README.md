@@ -1,4 +1,63 @@
-# GitHub Codespaces ♥️ React
+# Secure Cipher Bank
+
+A modern, secure digital banking web application for the Nigerian market, built on the base44 platform. This application uses client-side cryptography to ensure user private keys never leave their device.
+
+## Key Features
+
+- **Secure User Onboarding:** Multi-step registration process with identity verification and cryptographic key pair setup
+- **Transaction Security:** PIN-based authorization for all transactions with client-side signing
+- **Modern UI:** Clean, responsive interface built with Tailwind CSS
+- **Security Center:** Transparent security information and educational content for users
+
+## Security Architecture
+
+The application implements a robust security model:
+
+1. **Key Generation:** During registration, ECDSA key pair (curve P-384) is generated using the Web Crypto API
+2. **PIN Encryption:** User's 6-digit PIN is used to encrypt their private key using PBKDF2 and AES-GCM
+3. **Secure Storage:** Encrypted private key is stored in IndexedDB, never in localStorage
+4. **Transaction Signing:** Transactions are signed on-device after PIN verification
+
+## Technical Stack
+
+- **Frontend:** React, React Router, Tailwind CSS
+- **UI Components:** Custom components with Tailwind styling
+- **Icons:** lucide-react
+- **Cryptography:** Web Crypto API (native browser)
+- **Storage:** IndexedDB for secure client-side storage
+
+## Getting Started
+
+1. Install dependencies:
+   ```
+   npm install
+   ```
+
+2. Start the development server:
+   ```
+   npm start
+   ```
+
+3. Build for production:
+   ```
+   npm run build
+   ```
+
+## Project Structure
+
+- `/src/components`: Reusable UI components
+- `/src/pages`: Full page components
+- `/src/utils`: Utility functions, including SecureKeyManager
+- `/src/context`: React context providers
+- `/src/schemas`: JSON schema definitions for data models
+
+## License
+
+This project is proprietary and confidential.
+
+## Security Notice
+
+This application implements client-side cryptography as a security measure. The private key never leaves the user's device and is encrypted with their PIN. Always ensure you're using the application on a secure device and never share your PIN with anyone.b Codespaces ♥️ React
 
 Welcome to your shiny new Codespace running React! We've got everything fired up and running for you to explore React.
 

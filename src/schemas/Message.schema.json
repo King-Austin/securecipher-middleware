@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Message",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "content": { "type": "string" },
+    "type": { "type": "string" },
+    "priority": { "type": "string" },
+    "read": { "type": "boolean" }
+  },
+  "required": ["title", "content", "type", "priority", "read"]
+}
