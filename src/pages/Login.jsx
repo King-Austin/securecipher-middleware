@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Lock, Shield, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: '',
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -20,7 +22,7 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.email || !formData.password) {
+    if (!formData.username || !formData.password) {
       setError('Please fill in all fields');
       return;
     }
@@ -28,16 +30,23 @@ export default function Login() {
     try {
       setIsLoading(true);
       
-      // In a real app, you would validate credentials with an API
-      // For demo purposes, we'll just navigate to dashboard
-      setTimeout(() => {
-        setIsLoading(false);
-        navigate('/dashboard');
-      }, 1500);
+      // Call login API
+      await login(formData.username, formData.password);
       
+      // Navigate to dashboard on success
+      navigate('/dashboard');
     } catch (err) {
       console.error('Error during login:', err);
-      setError('Invalid email or password. Please try again.');
+      if (err.message && err.message.includes('CORS')) {
+        setError('There was a cross-origin (CORS) error connecting to the server. Please try a different browser or check your network connection.');
+      } else if (err.data && err.data.error) {
+        setError(err.data.error);
+      } else if (err.status === 0) {
+        setError('Unable to connect to the server. Please check your network connection and try again.');
+      } else {
+        setError('Invalid username or password. Please try again.');
+      }
+    } finally {
       setIsLoading(false);
     }
   };
@@ -59,19 +68,19 @@ export default function Login() {
             <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
               <form className="space-y-6" onSubmit={handleSubmit}>
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    Email Address
+                  <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                    Username
                   </label>
                   <div className="mt-1">
                     <input
-                      id="email"
-                      name="email"
-                      type="email"
+                      id="username"
+                      name="username"
+                      type="text"
                       required
-                      value={formData.email}
+                      value={formData.username}
                       onChange={handleChange}
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                      placeholder="you@example.com"
+                      placeholder="your_username"
                     />
                   </div>
                 </div>

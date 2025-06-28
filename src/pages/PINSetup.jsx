@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Check, AlertCircle } from 'lucide-react';
 import { SecureKeyManager } from '../utils/SecureKeyManager';
+import { useAuth } from '../context/AuthContext';
 
 export default function PINSetup() {
   const [pin, setPin] = useState('');
@@ -10,6 +11,7 @@ export default function PINSetup() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const navigate = useNavigate();
+  const { updatePublicKey, setPin: markPinSet } = useAuth();
 
   const handlePinChange = (e) => {
     const value = e.target.value.replace(/[^0-9]/g, '');
@@ -55,8 +57,11 @@ export default function PINSetup() {
       // Store encrypted key in IndexedDB
       await SecureKeyManager.storeEncryptedKey(encryptedKey);
       
-      // In a real application, you would send publicKeyBase64 to your server here
-      console.log('Public key generated:', publicKeyBase64);
+      // Send public key to server
+      await updatePublicKey(publicKeyBase64);
+      
+      // Mark that PIN has been set
+      await markPinSet();
       
       setIsSuccess(true);
       

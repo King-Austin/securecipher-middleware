@@ -51,6 +51,12 @@ The application implements a robust security model:
 - `/src/context`: React context providers
 - `/src/schemas`: JSON schema definitions for data models
 
+## Backend
+
+The backend for this application is built with Django and Django REST Framework, located in the `/backend` directory. The backend is designed to be stored in a separate git repository and is excluded from the main repository via `.gitignore`.
+
+For more information on setting up and running the backend, please see the `/backend/README.md` file.
+
 ## License
 
 This project is proprietary and confidential.
