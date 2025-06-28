@@ -23,30 +23,35 @@ export default function SendMoney() {
   const { user } = useAuth();
   
   useEffect(() => {
+    let isMounted = true; // Prevent memory leaks
+    
     // Fetch user profile when component loads
     const fetchProfile = async () => {
       try {
         const profileData = await api.profile.getProfile();
-        setProfile(profileData[0]); // Assuming the API returns an array of profiles
+        if (isMounted) {
+          setProfile(profileData[0]); // Assuming the API returns an array of profiles
+        }
       } catch (err) {
-        console.error('Error fetching profile:', err);
+        if (isMounted) {
+          console.error('Error fetching profile:', err);
+        }
       }
     };
     
     fetchProfile();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, []);
   
   const banks = [
     'Access Bank',
+    'Secure Cipher Bank',
     'First Bank of Nigeria',
     'Guaranty Trust Bank',
-    'United Bank for Africa',
-    'Zenith Bank',
-    'Fidelity Bank',
-    'Ecobank Nigeria',
-    'Union Bank of Nigeria',
-    'Sterling Bank',
-    'Wema Bank'
   ];
   
   const handleChange = (e) => {
@@ -93,16 +98,21 @@ export default function SendMoney() {
           // If the endpoint doesn't exist, just simulate for demo purposes
           console.log('Account verification endpoint not available, simulating response');
           
-          // Simulate account verification for demo purposes
-          setTimeout(() => {
-            setTransactionData(prev => ({
-              ...prev,
-              recipient_name: 'John Doe' // This would come from the bank's verification API
-            }));
-            
-            setLoading(false);
-            setStep(2);
+          // Simulate account verification for demo purposes with cleanup
+          const verificationTimeout = setTimeout(() => {
+            if (loading) { // Only proceed if still loading
+              setTransactionData(prev => ({
+                ...prev,
+                recipient_name: 'John Doe' // This would come from the bank's verification API
+              }));
+              
+              setLoading(false);
+              setStep(2);
+            }
           }, 1000);
+          
+          // Store timeout for potential cleanup
+          return () => clearTimeout(verificationTimeout);
         }
       } catch (err) {
         setError('Unable to verify account. Please check the account number and try again.');
@@ -183,8 +193,8 @@ export default function SendMoney() {
         setLoading(false);
         setSuccess(true);
         
-        // Reset after showing success
-        setTimeout(() => {
+        // Reset after showing success with cleanup
+        const resetTimeout = setTimeout(() => {
           setStep(1);
           setTransactionData({
             recipient_account: '',
@@ -197,6 +207,9 @@ export default function SendMoney() {
           setSuccess(false);
           setTransaction(null);
         }, 3000);
+        
+        // Store timeout ID for cleanup
+        return () => clearTimeout(resetTimeout);
       } catch (err) {
         console.error('Error sending transaction to backend:', err);
         setError(err.data?.error || 'Transaction failed. Please try again.');
