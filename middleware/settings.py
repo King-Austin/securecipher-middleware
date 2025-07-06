@@ -71,7 +71,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    # 'django.middleware.csrf.CsrfViewMiddleware',  # CSRF middleware disabled for demo purposes
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'crypto_engine.middleware.SecureCipherMiddleware',  # Add crypto middleware
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -153,7 +153,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -167,56 +166,5 @@ REST_FRAMEWORK = {
 }
 
 # SecureCipher Logging Configuration
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'crypto': {
-            'format': '[{levelname}] {asctime} {name} - {message}',
-            'style': '{',
-        },
-        'verbose': {
-            'format': '[{levelname}] {asctime} {name} {process:d} {thread:d} - {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'crypto_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'crypto_operations.log',
-            'formatter': 'crypto',
-        },
-        'console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
-            'formatter': 'crypto',
-        },
-        'main_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'middleware.log',
-            'formatter': 'verbose',
-        },
-    },
-    'loggers': {
-        'crypto_engine': {
-            'handlers': ['crypto_file', 'console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'middleware': {
-            'handlers': ['main_file', 'console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
-}
 
-# SecureCipher Configuration
-SECURE_CIPHER_CONFIG = {
-    'SIGNATURE_TIMEOUT': 300,  # 5 minutes
-    'REQUIRE_ENCRYPTION_FOR_SENSITIVE': True,
-    'AUDIT_LOG_RETENTION_DAYS': 90,
-    'MAX_KEY_AGE_DAYS': 365,
-}
+

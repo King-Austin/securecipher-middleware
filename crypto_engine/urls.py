@@ -5,10 +5,14 @@ URL routing for cryptographic API endpoints
 
 from django.urls import path
 from .views import RegisterPublicKeyView, VerifySignatureView, CryptoStatusView
+from .gateway import MiddlewarePublicKeyView, SecureGatewayView
 
 urlpatterns = [
     # Public key management
-    path('register-key/', RegisterPublicKeyView.as_view(), name='register-public-key'),
+    path('middleware/public-key/', MiddlewarePublicKeyView.as_view(), name='middleware-public-key'),
+    
+    # Secure gateway
+    path('secure/gateway/', SecureGatewayView.as_view(), name='secure-gateway'),
     
     # Signature verification
     path('verify-signature/', VerifySignatureView.as_view(), name='verify-signature'),
