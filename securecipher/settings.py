@@ -63,7 +63,7 @@ INSTALLED_APPS = [
     'corsheaders',
     
     # Local apps
-    'crypto_engine',
+    'api',  #Middleware Key Management API
 ]
 
 MIDDLEWARE = [
@@ -73,12 +73,11 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     # 'django.middleware.csrf.CsrfViewMiddleware',  # CSRF middleware disabled for demo purposes
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'crypto_engine.middleware.SecureCipherMiddleware',  # Add crypto middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'middleware.urls'
+ROOT_URLCONF = 'securecipher.urls'
 
 TEMPLATES = [
     {
@@ -95,7 +94,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'middleware.wsgi.application'
+WSGI_APPLICATION = 'securecipher.wsgi.application'
 
 
 # Database
@@ -156,7 +155,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',  # Allow any user to access the API
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
