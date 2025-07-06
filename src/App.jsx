@@ -25,6 +25,7 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Styles
 import './App.css';
+import SecureOnboardingForm from './context/SecureOnboardingForm';
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
@@ -36,7 +37,7 @@ function AppRoutes() {
       
       {/* Public routes */}
       <Route path="/register" element={<Registration />} />
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<SecureOnboardingForm />} /> 
       <Route path="/pin-setup" element={<PINSetup />} />
       
       {/* Protected routes with Layout */}
