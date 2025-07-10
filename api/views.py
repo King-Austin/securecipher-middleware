@@ -118,26 +118,23 @@ def secure_gateway(request):
             # Record the nonce as used
             UsedNonce.objects.create(nonce=nonce)
 
-            # --- MOCKING LOGIC ---
-            # If the target has a mock response, return it instead of making a real request.
-            if target_key in MOCK_RESPONSES:
-                print(f"DEBUG: Using mock response for target: {target_key}")
-                mock_response_data = MOCK_RESPONSES[target_key]
-                encrypted_response = CryptoHandler.encrypt_response(mock_response_data, session_key)
-                return Response(encrypted_response)
-            # --- END MOCKING LOGIC ---
-
             # Forward the validated transaction data to the downstream service
             try:
                 # Replace placeholders in URL if any, ensuring url_params is a dict
                 url_params = transaction_components.get('url_params') or {}
                 formatted_url = downstream_url.format(**url_params)
 
+                # Extract the JWT from the transaction components
+                auth_token = transaction_components.get('auth_token')
+                headers = {'Content-Type': 'application/json'}
+                if auth_token:
+                    headers['Authorization'] = f'Bearer {auth_token}'
+
                 downstream_response = requests.request(
                     method=http_method,
                     url=formatted_url, 
                     json=transaction_components.get('transaction_data'),
-                    headers={'Content-Type': 'application/json'},
+                    headers=headers,
                     timeout=10 # 10-second timeout
                 )
                 downstream_response.raise_for_status() # Raise an exception for bad status codes
@@ -236,12 +233,3 @@ def crypto_login(request):
             return Response(encrypted_error, status=500)
         # Otherwise, return a generic plaintext error
         return Response({"error": "An internal error occurred during decryption"}, status=500)
-
-
-MOCK_RESPONSES = {
-    'register': {"status": "success", "user_id": 123, "message": "User registered successfully (mocked)."},
-    'login': {"status": "success", "token": "mock_jwt_token_12345", "message": "Login successful (mocked)."},
-    'get_profile': {"username": "mock_user", "email": "mock@example.com", "last_login": "2025-07-09T12:00:00Z"},
-    'list_accounts': [{"id": 1, "account_number": "123456789", "balance": "1000.00"}, {"id": 2, "account_number": "987654321", "balance": "5000.00"}],
-    'transfer': {"status": "success", "transaction_id": "txn_mock_987", "message": "Transfer completed (mocked)."}
-}
