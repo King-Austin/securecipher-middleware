@@ -10,44 +10,45 @@ import time
 import requests
 import hashlib
 
-# Define the routing table for downstream services
+# Define the routing table m for downstream services
 ROUTING_TABLE = {
     # Auth
-    'register': {'url': 'http://localhost:8001/api/auth/register/', 'method': 'POST'},
-    'login': {'url': 'http://localhost:8001/api/auth/login/', 'method': 'POST'},
-    'logout': {'url': 'http://localhost:8001/api/auth/logout/', 'method': 'POST'},
-    'set_pin': {'url': 'http://localhost:8001/api/auth/set_pin/', 'method': 'POST'},
-    'verify_pin': {'url': 'http://localhost:8001/api/auth/verify_pin/', 'method': 'POST'},
+    'auth_register': {'url': 'http://localhost:8001/api/auth/register/', 'method': 'POST'},
+    'auth_login': {'url': 'http://localhost:8001/api/auth/login/', 'method': 'POST'},
+    'auth_logout': {'url': 'http://localhost:8001/api/auth/logout/', 'method': 'POST'},
+    'auth_set_pin': {'url': 'http://localhost:8001/api/auth/set_pin/', 'method': 'POST'},
+    'auth_verify_pin': {'url': 'http://localhost:8001/api/auth/verify_pin/', 'method': 'POST'},
+    'auth_token_refresh': {'url': 'http://localhost:8001/api/token/refresh/', 'method': 'POST'},
 
     # User Profile
-    'get_profile': {'url': 'http://localhost:8001/api/user/profile/', 'method': 'GET'},
-    'update_profile': {'url': 'http://localhost:8001/api/user/update_profile/', 'method': 'PUT'},
-    'change_password': {'url': 'http://localhost:8001/api/user/change_password/', 'method': 'POST'},
+    'user_get_profile': {'url': 'http://localhost:8001/api/user/profile/', 'method': 'GET'},
+    'user_update_profile': {'url': 'http://localhost:8001/api/user/update_profile/', 'method': 'PUT'},
+    'user_change_password': {'url': 'http://localhost:8001/api/user/change_password/', 'method': 'POST'},
 
     # Bank Accounts
-    'list_accounts': {'url': 'http://localhost:8001/api/accounts/', 'method': 'GET'},
-    'get_account': {'url': 'http://localhost:8001/api/accounts/{account_id}/', 'method': 'GET'},
-    'get_account_transactions': {'url': 'http://localhost:8001/api/accounts/{account_id}/transactions/', 'method': 'GET'},
-    'get_account_balance': {'url': 'http://localhost:8001/api/accounts/{account_id}/balance/', 'method': 'GET'},
+    'accounts_list': {'url': 'http://localhost:8001/api/accounts/', 'method': 'GET'},
+    'accounts_get': {'url': 'http://localhost:8001/api/accounts/{account_id}/', 'method': 'GET'},
+    'accounts_get_transactions': {'url': 'http://localhost:8001/api/accounts/{account_id}/transactions/', 'method': 'GET'},
+    'accounts_get_balance': {'url': 'http://localhost:8001/api/accounts/{account_id}/balance/', 'method': 'GET'},
 
     # Transactions
-    'list_transactions': {'url': 'http://localhost:8001/api/transactions/', 'method': 'GET'},
-    'get_transaction': {'url': 'http://localhost:8001/api/transactions/{transaction_id}/', 'method': 'GET'},
-    'transfer': {'url': 'http://localhost:8001/api/transactions/transfer/', 'method': 'POST'},
+    'transactions_list': {'url': 'http://localhost:8001/api/transactions/', 'method': 'GET'},
+    'transactions_get': {'url': 'http://localhost:8001/api/transactions/{transaction_id}/', 'method': 'GET'},
+    'transactions_transfer': {'url': 'http://localhost:8001/api/transactions/transfer/', 'method': 'POST'},
 
     # Beneficiaries
-    'list_beneficiaries': {'url': 'http://localhost:8001/api/beneficiaries/', 'method': 'GET'},
-    'add_beneficiary': {'url': 'http://localhost:8001/api/beneficiaries/', 'method': 'POST'},
-    'get_beneficiary': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'GET'},
-    'update_beneficiary': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'PUT'},
-    'delete_beneficiary': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'DELETE'},
+    'beneficiaries_list': {'url': 'http://localhost:8001/api/beneficiaries/', 'method': 'GET'},
+    'beneficiaries_add': {'url': 'http://localhost:8001/api/beneficiaries/', 'method': 'POST'},
+    'beneficiaries_get': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'GET'},
+    'beneficiaries_update': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'PUT'},
+    'beneficiaries_delete': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'DELETE'},
 
     # Cards
-    'list_cards': {'url': 'http://localhost:8001/api/cards/', 'method': 'GET'},
-    'add_card': {'url': 'http://localhost:8001/api/cards/', 'method': 'POST'},
-    'get_card': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'GET'},
-    'update_card': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'PUT'},
-    'delete_card': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'DELETE'},
+    'cards_list': {'url': 'http://localhost:8001/api/cards/', 'method': 'GET'},
+    'cards_add': {'url': 'http://localhost:8001/api/cards/', 'method': 'POST'},
+    'cards_get': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'GET'},
+    'cards_update': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'PUT'},
+    'cards_delete': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'DELETE'},
 }
 
 def get_or_create_active_key():
@@ -75,7 +76,8 @@ def secure_gateway(request):
         
         # Load server's private key
         middleware_key = get_or_create_active_key()
-        server_private_key = CryptoHandler.load_private_key(middleware_key.private_key_pem)
+        server_private_key_pem = middleware_key.private_key_pem
+        server_private_key = CryptoHandler.load_private_key(server_private_key_pem)
         
         # Decrypt the payload and get session key
         decrypted_payload, session_key = CryptoHandler.decrypt_payload(encrypted_payload, server_private_key)
@@ -91,6 +93,9 @@ def secure_gateway(request):
         route_info = ROUTING_TABLE[target_key]
         downstream_url = route_info['url']
         http_method = route_info['method']
+        # Log the forwarding action
+        print(f"DEBUG: Forwarding to {http_method} {downstream_url}")
+        print(f"DEBUG: Transaction components: {transaction_components}")
 
         # Anti-replay check
         nonce = transaction_components.get('nonce')
@@ -120,29 +125,35 @@ def secure_gateway(request):
 
             # Forward the validated transaction data to the downstream service
             try:
-                # Replace placeholders in URL if any, ensuring url_params is a dict
+                # Prepare URL with any path params
                 url_params = transaction_components.get('url_params') or {}
                 formatted_url = downstream_url.format(**url_params)
-
-                # Extract the JWT from the transaction components
-                auth_token = transaction_components.get('auth_token')
+                # Build headers including downstream JWT
                 headers = {'Content-Type': 'application/json'}
+                auth_token = transaction_components.get('auth_token')
                 if auth_token:
                     headers['Authorization'] = f'Bearer {auth_token}'
-
+                # Make the request
                 downstream_response = requests.request(
                     method=http_method,
-                    url=formatted_url, 
+                    url=formatted_url,
                     json=transaction_components.get('transaction_data'),
                     headers=headers,
-                    timeout=10 # 10-second timeout
+                    timeout=10
                 )
-                downstream_response.raise_for_status() # Raise an exception for bad status codes
-                response_data = downstream_response.json()
-
             except requests.exceptions.RequestException as e:
                 print(f"Downstream service error: {e}")
                 raise ValueError("Failed to communicate with the downstream service.")
+            # If the downstream returned an error status, pass its JSON error through
+            if downstream_response.status_code >= 400:
+                try:
+                    error_data = downstream_response.json()
+                except ValueError:
+                    error_data = {'error': downstream_response.text}
+                encrypted_error = CryptoHandler.encrypt_response(error_data, session_key)
+                return Response(encrypted_error, status=downstream_response.status_code)
+            # Otherwise, parse successful response
+            response_data = downstream_response.json()
 
             # Encrypt the response from the downstream service
             encrypted_response = CryptoHandler.encrypt_response(response_data, session_key)
@@ -161,7 +172,7 @@ def secure_gateway(request):
         print(f"DEBUG: SecureCipher gateway exception: {error}")
         traceback.print_exc()
         # Encrypt the error response if session_key is available
-        if 'session_key' in locals():
+        if session_key:
             error_response = TransactionHandler.create_error_response(str(error))
             encrypted_response = CryptoHandler.encrypt_response(error_response, session_key)
             return Response(encrypted_response, status=500)

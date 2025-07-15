@@ -161,12 +161,13 @@ class TransactionHandler:
         
         return {
             'target': decrypted_payload.get("target"),
-            'transaction_data': decrypted_payload.get("transaction"),
+            'transaction_data': decrypted_payload.get("transaction_data"),
             'url_params': decrypted_payload.get("url_params"),
-            'client_signature': decrypted_payload["signature"],
-            'client_public_key': decrypted_payload["public_key"],
+            'client_signature': decrypted_payload["client_signature"],
+            'client_public_key': decrypted_payload["client_public_key"],
             'timestamp': decrypted_payload.get("timestamp"),
-            'nonce': decrypted_payload.get("nonce")
+            'nonce': decrypted_payload.get("nonce"),
+            'auth_token': decrypted_payload.get("auth_token")
         }
 
     @staticmethod
