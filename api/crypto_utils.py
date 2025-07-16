@@ -1,15 +1,18 @@
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.exceptions import InvalidSignature
-from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
 import base64
 import json
+import os
 
 
 class CryptoHandler:
     """Handles all cryptographic operations for the middleware"""
+    
+    # Class-level cache for HKDF instance (performance optimization)
+    _hkdf_cache = None
     
     @staticmethod
     def load_private_key(pem_data):
@@ -27,44 +30,45 @@ class CryptoHandler:
         return private_key.exchange(ec.ECDH(), public_key)
 
     @staticmethod
-    def derive_session_key_from_hkdf(shared_secret):
-        """Derive session key using HKDF - matches frontend derivation."""
-        hkdf = HKDF(
-            algorithm=hashes.SHA384(),
-            length=32,  # AES-256 key
-            salt=None,
-            info=b'secure-cipher-session-key'
-        )
-        session_key = hkdf.derive(shared_secret)
+    def derive_session_key(shared_secret):
+        """Derive session key using HKDF - standardized method for consistency."""
+        # Use cached HKDF instance for performance
+        if CryptoHandler._hkdf_cache is None:
+            CryptoHandler._hkdf_cache = HKDF(
+                algorithm=hashes.SHA384(),
+                length=32,  # AES-256 key
+                salt=None,
+                info=b'secure-cipher-session-key'
+            )
+        
+        session_key = CryptoHandler._hkdf_cache.derive(shared_secret)
         print(f"DEBUG: Session key derived via HKDF: {len(session_key)} bytes")
         return session_key
     
     @staticmethod
     def encrypt_aes_gcm(plaintext_bytes, session_key):
         """Encrypt data using AES-GCM - matches frontend encryption"""
-        # Generate random IV
-        iv = get_random_bytes(12)  # 96-bit IV for GCM
+        # Generate random IV (nonce)
+        iv = os.urandom(12)  # 96-bit IV for GCM
         
         # Create AES-GCM cipher
-        aes_gcm_cipher = AES.new(session_key, AES.MODE_GCM, nonce=iv)
+        aesgcm = AESGCM(session_key)
         
-        # Encrypt and get authentication tag
-        ciphertext, auth_tag = aes_gcm_cipher.encrypt_and_digest(plaintext_bytes)
+        # Encrypt and get ciphertext with authentication tag
+        ciphertext = aesgcm.encrypt(iv, plaintext_bytes, None)
         
-        # Combine ciphertext with auth tag (append tag to ciphertext)
-        encrypted_data = ciphertext + auth_tag
-        
-        print(f"DEBUG: AES-GCM encryption - IV: {len(iv)} bytes, Encrypted: {len(encrypted_data)} bytes")
-        return encrypted_data, iv
+        # Return IV and ciphertext (authentication tag is included in ciphertext)
+        print(f"DEBUG: AES-GCM encryption - IV: {len(iv)} bytes, Encrypted: {len(ciphertext)} bytes")
+        return ciphertext, iv
 
     @staticmethod
     def decrypt_aes_gcm(encrypted_ciphertext, initialization_vector, session_key):
-        """Decrypt AES-GCM encrypted data using PyCryptodome"""
-        authentication_tag = encrypted_ciphertext[-16:]
-        actual_ciphertext = encrypted_ciphertext[:-16]
+        """Decrypt AES-GCM encrypted data using cryptography library"""
+        # Create AES-GCM cipher
+        aesgcm = AESGCM(session_key)
         
-        aes_gcm_cipher = AES.new(session_key, AES.MODE_GCM, nonce=initialization_vector)
-        decrypted_data = aes_gcm_cipher.decrypt_and_verify(actual_ciphertext, authentication_tag)
+        # Decrypt and verify (authentication tag is included in ciphertext)
+        decrypted_data = aesgcm.decrypt(initialization_vector, encrypted_ciphertext, None)
         
         return decrypted_data
     
@@ -82,8 +86,8 @@ class CryptoHandler:
         # Perform ECDH key exchange to derive shared secret
         shared_secret = CryptoHandler.perform_ecdh(private_key, ephemeral_public_key)
         
-        # Derive session key from shared secret
-        session_key = CryptoHandler.derive_session_key_from_hkdf(shared_secret)
+        # Derive session key from shared secret (standardized method)
+        session_key = CryptoHandler.derive_session_key(shared_secret)
         
         # Decrypt the payload
         decrypted_payload_bytes = CryptoHandler.decrypt_aes_gcm(encrypted_ciphertext, initialization_vector, session_key)
@@ -151,8 +155,8 @@ class CryptoHandler:
             return False
 
 
-class TransactionHandler:
-    """Handles transaction processing and validation"""
+class TransactionProcessor:
+    """Handles transaction processing and validation - business logic only"""
     
     @staticmethod
     def extract_transaction_components(decrypted_payload):
@@ -172,12 +176,13 @@ class TransactionHandler:
 
     @staticmethod
     def prepare_transaction_for_verification(transaction_data):
-        """Prepare transaction data for signature verification"""
+        """Prepare transaction data for signature verification - optimized JSON serialization"""
+        # Use separators for minimal JSON output (performance optimization)
         transaction_json = json.dumps(transaction_data, sort_keys=True, separators=(',', ':'))
         transaction_bytes = transaction_json.encode('utf-8')
         
         print(f"DEBUG: Transaction JSON for verification: {transaction_json}")
-        print(f"DEBUG: Transaction bytes for verification: {list(transaction_bytes)}")
+        print(f"DEBUG: Transaction bytes length: {len(transaction_bytes)} bytes")
         
         return transaction_bytes
     
@@ -200,14 +205,14 @@ class TransactionHandler:
     
     @staticmethod
     def verify_transaction_signature(transaction_data, client_signature, client_public_key):
-        """Verify client's transaction signature"""
-        transaction_bytes = TransactionHandler.prepare_transaction_for_verification(transaction_data)
+        """Verify client's transaction signature - uses consolidated crypto handler"""
+        transaction_bytes = TransactionProcessor.prepare_transaction_for_verification(transaction_data)
         
         print(f"DEBUG: User transaction data: {transaction_data}")
         print(f"DEBUG: Client signature: {client_signature[:50]}...")
         print(f"DEBUG: Client public key: {client_public_key[:100]}...")
         
-        # Verify the signature
+        # Use the centralized crypto handler for consistency
         is_valid = CryptoHandler.verify_signature(client_public_key, transaction_bytes, client_signature)
         
         if is_valid:
@@ -217,13 +222,9 @@ class TransactionHandler:
         
         return is_valid
 
-
-class ClientCryptoHandler:
-    """Handles client-side cryptographic operations for response decryption"""
-    
     @staticmethod
-    def decrypt_server_response(encrypted_response, session_key):
-        """Decrypts the server's response using the session key"""
+    def decrypt_response(encrypted_response, session_key):
+        """Decrypts server response using the session key - consolidated method"""
         encrypted_ciphertext = base64.b64decode(encrypted_response["ciphertext"])
         initialization_vector = base64.b64decode(encrypted_response["iv"])
         

@@ -60,7 +60,6 @@ INSTALLED_APPS = [
     
     # Third-party apps
     'rest_framework',
-    'rest_framework_simplejwt',
     'corsheaders',
     
     # Local apps
@@ -79,9 +78,12 @@ MIDDLEWARE = [
 ]
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',  # Allow any user to access the API
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
 }
 
 ROOT_URLCONF = 'securecipher.urls'
@@ -156,21 +158,43 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Django REST Framework Configuration
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',  # Allow any user to access the API
-    ],
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
-    ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
-}
-
 # SecureCipher Logging Configuration
 
 
+ROUTING_TABLE = {
+    # Auth
+    'auth_register': {'url': 'http://localhost:8001/api/auth/register/', 'method': 'POST'},
+    'auth_login': {'url': 'http://localhost:8001/api/auth/login/', 'method': 'POST'},
+    'auth_logout': {'url': 'http://localhost:8001/api/auth/logout/', 'method': 'POST'},
+    'auth_set_pin': {'url': 'http://localhost:8001/api/auth/set_pin/', 'method': 'POST'},
+    'auth_verify_pin': {'url': 'http://localhost:8001/api/auth/verify_pin/', 'method': 'POST'},
+
+    # User Profile
+    'user_get_profile': {'url': 'http://localhost:8001/api/user/profile/', 'method': 'GET'},
+    'user_update_profile': {'url': 'http://localhost:8001/api/user/update_profile/', 'method': 'PUT'},
+
+    # Bank Accounts
+    'accounts_list': {'url': 'http://localhost:8001/api/accounts/', 'method': 'GET'},
+    'accounts_get': {'url': 'http://localhost:8001/api/accounts/{account_id}/', 'method': 'GET'},
+    'accounts_get_transactions': {'url': 'http://localhost:8001/api/accounts/{account_id}/transactions/', 'method': 'GET'},
+    'accounts_get_balance': {'url': 'http://localhost:8001/api/accounts/{account_id}/balance/', 'method': 'GET'},
+
+    # Transactions
+    'transactions_list': {'url': 'http://localhost:8001/api/transactions/', 'method': 'GET'},
+    'transactions_get': {'url': 'http://localhost:8001/api/transactions/{transaction_id}/', 'method': 'GET'},
+    'transactions_transfer': {'url': 'http://localhost:8001/api/transactions/transfer/', 'method': 'POST'},
+
+    # Beneficiaries
+    'beneficiaries_list': {'url': 'http://localhost:8001/api/beneficiaries/', 'method': 'GET'},
+    'beneficiaries_add': {'url': 'http://localhost:8001/api/beneficiaries/', 'method': 'POST'},
+    'beneficiaries_get': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'GET'},
+    'beneficiaries_update': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'PUT'},
+    'beneficiaries_delete': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'DELETE'},
+
+    # Cards
+    'cards_list': {'url': 'http://localhost:8001/api/cards/', 'method': 'GET'},
+    'cards_add': {'url': 'http://localhost:8001/api/cards/', 'method': 'POST'},
+    'cards_get': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'GET'},
+    'cards_update': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'PUT'},
+    'cards_delete': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'DELETE'},
+}

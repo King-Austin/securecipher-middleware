@@ -1,55 +1,13 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.models import User
+from django.conf import settings
 from api.models import MiddlewareKey, UsedNonce
+
 from scripts import generate_keypair 
-from .crypto_utils import CryptoHandler, TransactionHandler
+from .crypto_utils import CryptoHandler, TransactionProcessor
+from .downstream_handler import DownstreamServiceManager
 import traceback
 import time
-import requests
-import hashlib
-
-# Define the routing table m for downstream services
-ROUTING_TABLE = {
-    # Auth
-    'auth_register': {'url': 'http://localhost:8001/api/auth/register/', 'method': 'POST'},
-    'auth_login': {'url': 'http://localhost:8001/api/auth/login/', 'method': 'POST'},
-    'auth_logout': {'url': 'http://localhost:8001/api/auth/logout/', 'method': 'POST'},
-    'auth_set_pin': {'url': 'http://localhost:8001/api/auth/set_pin/', 'method': 'POST'},
-    'auth_verify_pin': {'url': 'http://localhost:8001/api/auth/verify_pin/', 'method': 'POST'},
-    'auth_token_refresh': {'url': 'http://localhost:8001/api/token/refresh/', 'method': 'POST'},
-
-    # User Profile
-    'user_get_profile': {'url': 'http://localhost:8001/api/user/profile/', 'method': 'GET'},
-    'user_update_profile': {'url': 'http://localhost:8001/api/user/update_profile/', 'method': 'PUT'},
-    'user_change_password': {'url': 'http://localhost:8001/api/user/change_password/', 'method': 'POST'},
-
-    # Bank Accounts
-    'accounts_list': {'url': 'http://localhost:8001/api/accounts/', 'method': 'GET'},
-    'accounts_get': {'url': 'http://localhost:8001/api/accounts/{account_id}/', 'method': 'GET'},
-    'accounts_get_transactions': {'url': 'http://localhost:8001/api/accounts/{account_id}/transactions/', 'method': 'GET'},
-    'accounts_get_balance': {'url': 'http://localhost:8001/api/accounts/{account_id}/balance/', 'method': 'GET'},
-
-    # Transactions
-    'transactions_list': {'url': 'http://localhost:8001/api/transactions/', 'method': 'GET'},
-    'transactions_get': {'url': 'http://localhost:8001/api/transactions/{transaction_id}/', 'method': 'GET'},
-    'transactions_transfer': {'url': 'http://localhost:8001/api/transactions/transfer/', 'method': 'POST'},
-
-    # Beneficiaries
-    'beneficiaries_list': {'url': 'http://localhost:8001/api/beneficiaries/', 'method': 'GET'},
-    'beneficiaries_add': {'url': 'http://localhost:8001/api/beneficiaries/', 'method': 'POST'},
-    'beneficiaries_get': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'GET'},
-    'beneficiaries_update': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'PUT'},
-    'beneficiaries_delete': {'url': 'http://localhost:8001/api/beneficiaries/{beneficiary_id}/', 'method': 'DELETE'},
-
-    # Cards
-    'cards_list': {'url': 'http://localhost:8001/api/cards/', 'method': 'GET'},
-    'cards_add': {'url': 'http://localhost:8001/api/cards/', 'method': 'POST'},
-    'cards_get': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'GET'},
-    'cards_update': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'PUT'},
-    'cards_delete': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'DELETE'},
-}
 
 def get_or_create_active_key():
     """Get active middleware key or create one if it doesn't exist"""
@@ -83,18 +41,15 @@ def secure_gateway(request):
         decrypted_payload, session_key = CryptoHandler.decrypt_payload(encrypted_payload, server_private_key)
         
         # Extract transaction components
-        transaction_components = TransactionHandler.extract_transaction_components(decrypted_payload)
+        transaction_components = TransactionProcessor.extract_transaction_components(decrypted_payload)
 
-        # Get the target route details
+        # Validate target exists (will be handled by downstream manager)
         target_key = transaction_components.get('target')
-        if not target_key or target_key not in ROUTING_TABLE:
-            raise ValueError(f"Invalid or missing target: {target_key}")
-        
-        route_info = ROUTING_TABLE[target_key]
-        downstream_url = route_info['url']
-        http_method = route_info['method']
+        if not target_key:
+            raise ValueError("Missing target in transaction")
+
         # Log the forwarding action
-        print(f"DEBUG: Forwarding to {http_method} {downstream_url}")
+        print(f"DEBUG: Processing transaction for target: {target_key}")
         print(f"DEBUG: Transaction components: {transaction_components}")
 
         # Anti-replay check
@@ -113,7 +68,7 @@ def secure_gateway(request):
             raise ValueError("Replay attack detected: timestamp is too old.")
             
         # Verify client's signature
-        signature_is_valid = TransactionHandler.verify_transaction_signature(
+        signature_is_valid = TransactionProcessor.verify_transaction_signature(
             transaction_components['transaction_data'],
             transaction_components['client_signature'], 
             transaction_components['client_public_key']
@@ -125,43 +80,28 @@ def secure_gateway(request):
 
             # Forward the validated transaction data to the downstream service
             try:
-                # Prepare URL with any path params
-                url_params = transaction_components.get('url_params') or {}
-                formatted_url = downstream_url.format(**url_params)
-                # Build headers including downstream JWT
-                headers = {'Content-Type': 'application/json'}
-                auth_token = transaction_components.get('auth_token')
-                if auth_token:
-                    headers['Authorization'] = f'Bearer {auth_token}'
-                # Make the request
-                downstream_response = requests.request(
-                    method=http_method,
-                    url=formatted_url,
-                    json=transaction_components.get('transaction_data'),
-                    headers=headers,
-                    timeout=10
-                )
-            except requests.exceptions.RequestException as e:
+                # Use the new downstream service manager
+                downstream_manager = DownstreamServiceManager()
+                response_data, status_code = downstream_manager.route_transaction(transaction_components)
+                
+            except ValueError as e:
                 print(f"Downstream service error: {e}")
-                raise ValueError("Failed to communicate with the downstream service.")
-            # If the downstream returned an error status, pass its JSON error through
-            if downstream_response.status_code >= 400:
-                try:
-                    error_data = downstream_response.json()
-                except ValueError:
-                    error_data = {'error': downstream_response.text}
-                encrypted_error = CryptoHandler.encrypt_response(error_data, session_key)
-                return Response(encrypted_error, status=downstream_response.status_code)
-            # Otherwise, parse successful response
-            response_data = downstream_response.json()
-
-            # Encrypt the response from the downstream service
+                error_response = TransactionProcessor.create_error_response(str(e))
+                encrypted_error = CryptoHandler.encrypt_response(error_response, session_key)
+                return Response(encrypted_error, status=500)
+                
+            # Handle error responses from downstream service
+            if status_code >= 400:
+                encrypted_error = CryptoHandler.encrypt_response(response_data, session_key)
+                return Response(encrypted_error, status=status_code)
+                
+            # Encrypt successful response from the downstream service
             encrypted_response = CryptoHandler.encrypt_response(response_data, session_key)
             
             return Response(encrypted_response)
         else:
             # Create error response and encrypt it
-            error_response = TransactionHandler.create_error_response(
+            error_response = TransactionProcessor.create_error_response(
                 "Client signature verification failed"
             )
             encrypted_response = CryptoHandler.encrypt_response(error_response, session_key)
@@ -173,74 +113,8 @@ def secure_gateway(request):
         traceback.print_exc()
         # Encrypt the error response if session_key is available
         if session_key:
-            error_response = TransactionHandler.create_error_response(str(error))
+            error_response = TransactionProcessor.create_error_response(str(error))
             encrypted_response = CryptoHandler.encrypt_response(error_response, session_key)
             return Response(encrypted_response, status=500)
         else:
             return Response({"error": "An internal error occurred during decryption"}, status=500)
-
-# New view for cryptographic login
-@api_view(['POST'])
-def crypto_login(request):
-    """
-    Authenticates a user based on a signed challenge.
-    If successful, returns JWT access and refresh tokens.
-    """
-    session_key = None
-    try:
-        encrypted_payload = request.data
-        
-        # Load server's private key
-        middleware_key = get_or_create_active_key()
-        server_private_key = CryptoHandler.load_private_key(middleware_key.private_key_pem)
-        
-        # Decrypt the payload and get session key
-        decrypted_payload, session_key = CryptoHandler.decrypt_payload(encrypted_payload, server_private_key)
-
-        # Extract components
-        client_public_key_pem = decrypted_payload.get('public_key')
-        challenge = decrypted_payload.get('challenge')
-        signature_hex = decrypted_payload.get('signature')
-
-        if not all([client_public_key_pem, challenge, signature_hex]):
-            return Response({"error": "Missing required fields for authentication."}, status=400)
-
-        # For this example, we'll use the public key's SHA256 hash as the username.
-        # This ensures a unique, deterministic username for each key.
-        username = hashlib.sha256(client_public_key_pem.encode()).hexdigest()
-
-        # Verify the signature of the challenge
-        is_valid = CryptoHandler.verify_signature(
-            challenge.encode(), 
-            bytes.fromhex(signature_hex), 
-            CryptoHandler.load_public_key(client_public_key_pem)
-        )
-
-        if not is_valid:
-            return Response({"error": "Invalid signature."}, status=401)
-
-        # If the signature is valid, get or create the user
-        # In a real app, you'd also store the public key linked to the user profile.
-        user, created = User.objects.get_or_create(username=username)
-        if created:
-            # You might want to set other user properties here
-            user.save()
-
-        # Generate JWT tokens
-        refresh = RefreshToken.for_user(user)
-        
-        return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'username': user.username, # Return username for frontend use
-        })
-
-    except Exception as e:
-        traceback.print_exc()
-        error_message = f"An error occurred during login: {str(e)}"
-        # If we have a session key, encrypt the error response
-        if session_key:
-            encrypted_error = CryptoHandler.encrypt_response({"error": error_message}, session_key)
-            return Response(encrypted_error, status=500)
-        # Otherwise, return a generic plaintext error
-        return Response({"error": "An internal error occurred during decryption"}, status=500)
