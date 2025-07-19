@@ -19,6 +19,7 @@ class DownstreamServiceHandler:
     
     def __init__(self):
         self.routing_table = getattr(settings, 'ROUTING_TABLE', {})
+        self.url_to_key_mapping = getattr(settings, 'URL_TO_KEY_MAPPING', {})
         self.default_timeout = 30
         self.max_retries = 3
         
@@ -27,7 +28,7 @@ class DownstreamServiceHandler:
         Get routing information for a target key.
         
         Args:
-            target_key: The routing key (e.g., 'auth_register', 'transactions_transfer')
+            target_key: The routing key (e.g., 'auth_register') or URL path (e.g., '/auth/register/')
             
         Returns:
             Dict containing route information (url, method, etc.)
@@ -35,10 +36,24 @@ class DownstreamServiceHandler:
         Raises:
             ValueError: If target key is invalid or not found
         """
-        if not target_key or target_key not in self.routing_table:
-            raise ValueError(f"Invalid or missing target: {target_key}")
+        # Validate input
+        if not target_key or not isinstance(target_key, str):
+            raise ValueError(f"Invalid target: target must be a non-empty string, got: {target_key}")
             
-        return self.routing_table[target_key]
+        # First, check if it's already a valid routing key
+        if target_key in self.routing_table:
+            return self.routing_table[target_key]
+            
+        # If not, try to map URL path to routing key
+        if target_key in self.url_to_key_mapping:
+            mapped_key = self.url_to_key_mapping[target_key]
+            print(f"DEBUG: Mapped URL '{target_key}' to routing key '{mapped_key}'")
+            return self.routing_table[mapped_key]
+            
+        # If neither works, raise an error with helpful message
+        available_keys = list(self.routing_table.keys())
+        available_urls = list(self.url_to_key_mapping.keys())
+        raise ValueError(f"Invalid or missing target: '{target_key}'. Available routing keys: {available_keys[:5]}... Available URL paths: {available_urls[:5]}...")
     
     def format_downstream_url(self, base_url: str, url_params: Optional[Dict[str, Any]] = None) -> str:
         """

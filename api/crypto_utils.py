@@ -11,9 +11,6 @@ import os
 class CryptoHandler:
     """Handles all cryptographic operations for the middleware"""
     
-    # Class-level cache for HKDF instance (performance optimization)
-    _hkdf_cache = None
-    
     @staticmethod
     def load_private_key(pem_data):
         """Load private key from PEM format"""
@@ -32,16 +29,15 @@ class CryptoHandler:
     @staticmethod
     def derive_session_key(shared_secret):
         """Derive session key using HKDF - standardized method for consistency."""
-        # Use cached HKDF instance for performance
-        if CryptoHandler._hkdf_cache is None:
-            CryptoHandler._hkdf_cache = HKDF(
-                algorithm=hashes.SHA384(),
-                length=32,  # AES-256 key
-                salt=None,
-                info=b'secure-cipher-session-key'
-            )
+        # Create a new HKDF instance for each derivation (HKDF can only be used once)
+        hkdf = HKDF(
+            algorithm=hashes.SHA384(),
+            length=32,  # AES-256 key
+            salt=None,
+            info=b'secure-cipher-session-key'
+        )
         
-        session_key = CryptoHandler._hkdf_cache.derive(shared_secret)
+        session_key = hkdf.derive(shared_secret)
         print(f"DEBUG: Session key derived via HKDF: {len(session_key)} bytes")
         return session_key
     

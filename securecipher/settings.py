@@ -198,3 +198,19 @@ ROUTING_TABLE = {
     'cards_update': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'PUT'},
     'cards_delete': {'url': 'http://localhost:8001/api/cards/{card_id}/', 'method': 'DELETE'},
 }
+
+# URL path to routing key mapping - for frontend compatibility
+URL_TO_KEY_MAPPING = {
+    '/auth/register/': 'auth_register',
+    '/auth/login/': 'auth_login',
+    '/auth/logout/': 'auth_logout',
+    '/auth/set_pin/': 'auth_set_pin',
+    '/auth/verify_pin/': 'auth_verify_pin',
+    '/user/profile/': 'user_get_profile',
+    '/user/update_profile/': 'user_update_profile',
+    '/accounts/': 'accounts_list',
+    '/transactions/': 'transactions_list',
+    '/transactions/transfer/': 'transactions_transfer',
+    '/beneficiaries/': 'beneficiaries_list',
+    '/cards/': 'cards_list',
+}
