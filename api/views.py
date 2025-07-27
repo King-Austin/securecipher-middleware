@@ -39,7 +39,7 @@ def secure_gateway(request):
         
         # Decrypt the payload and get session key
         decrypted_payload, session_key = CryptoHandler.decrypt_payload(encrypted_payload, server_private_key)
-        
+        print(decrypted_payload)
         # Extract transaction components
         transaction_components = TransactionProcessor.extract_transaction_components(decrypted_payload)
 
