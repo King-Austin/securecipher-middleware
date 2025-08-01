@@ -27,6 +27,15 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', "*"]
 
+CORS_ALLOWED_ORIGINS = [
+    "https://securecipherbank.vercel.app",  # Your deployed frontend domain
+
+    "http://localhost:3000",  # Local development frontend
+    "https://turbo-space-spoon-69r4q64wgj6c57xp-3000.app.github.dev",  # Codespaces frontend
+    "https://turbo-space-spoon-69r4q64wgj6c57xp-8000.app.github.dev",  # Codespaces backend
+    ]
+
+
 # CORS Configuration for SecureCipher Frontend Integration
 CORS_ALLOW_ALL_ORIGINS = True  # For development only
 CORS_ALLOW_CREDENTIALS = True
@@ -161,16 +170,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # SecureCipher Logging Configuration
 
 
+# Define routing table for downstream services
 ROUTING_TABLE = {
-    # Auth
-    'register': {'url': 'http://localhost:8001/api/register/', 'method': 'POST'},
-    'validate_account': {'url': 'http://localhost:8001/api/validate_account/', 'method': 'POST'},
-    'transfer': {'url': 'http://localhost:8001/api/transfer/', 'method': 'POST'},
-    
-
-    # User Profile
-    'user_get_profile': {'url': 'http://localhost:8001/api/user/profile/', 'method': 'GET'},
-    'user_update_profile': {'url': 'http://localhost:8001/api/user/update_profile/', 'method': 'PUT'},
-
+    "register": "http://localhost:8001/api/register/",
+    "validate_account": "http://localhost:8001/api/validate_account/",
+    "transfer": "http://localhost:8001/api/transfer/",
+    "public_key": "http://localhost:8001/api/public-key/",
 }
-

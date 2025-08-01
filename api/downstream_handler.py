@@ -1,6 +1,5 @@
 import requests
 import time
-from typing import Dict, Any, Optional, Tuple
 from django.conf import settings
 
 class DownstreamServiceHandler:
@@ -9,22 +8,7 @@ class DownstreamServiceHandler:
         self.default_timeout = 30
         self.max_retries = 3
 
-    def get_route_info(self, target_key: str) -> Dict[str, Any]:
-        if not target_key or not isinstance(target_key, str):
-            raise ValueError(f"Invalid target: {target_key}")
-        if target_key in self.routing_table:
-            return self.routing_table[target_key]
-        raise ValueError(f"Invalid or missing target: '{target_key}'. Available: {list(self.routing_table.keys())[:5]}")
-
-    def format_url(self, base_url: str, url_params: Optional[Dict[str, Any]] = None) -> str:
-        if url_params:
-            try:
-                return base_url.format(**url_params)
-            except KeyError as e:
-                raise ValueError(f"Missing URL parameter: {e}")
-        return base_url
-
-    def make_request(self, method: str, url: str, data=None, headers=None, timeout=None) -> requests.Response:
+    def send_request(self, method, url, data=None, headers=None, timeout=None):
         headers = headers or {
             'Content-Type': 'application/json',
             'User-Agent': 'SecureCipher-Middleware/1.0',
@@ -43,7 +27,12 @@ class DownstreamServiceHandler:
                     timeout=timeout
                 )
                 print(f"DEBUG: Downstream status: {resp.status_code}")
-                return resp
+
+                
+                try:
+                    return resp.json(), resp.status_code
+                except ValueError:
+                    return {'error': 'Invalid JSON from downstream', 'raw_response': resp.text[:500]}, resp.status_code
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.RequestException) as e:
                 last_exception = e
                 print(f"DEBUG: Downstream request error: {e}")
@@ -51,25 +40,21 @@ class DownstreamServiceHandler:
                     time.sleep(2 ** attempt)
         raise ValueError(f"Downstream service failed after {self.max_retries} attempts: {last_exception}")
 
-    def process_response(self, response: requests.Response) -> Tuple[Dict[str, Any], int]:
-        try:
-            return response.json(), response.status_code
-        except ValueError:
-            return {'error': 'Invalid JSON from downstream', 'raw_response': response.text[:500]}, response.status_code
 
-    def forward_transaction(self, target_key: str, transaction_data: Dict[str, Any], url_params=None, headers=None) -> Tuple[Dict[str, Any], int]:
-        route = self.get_route_info(target_key)
-        url = self.format_url(route['url'], url_params)
-        resp = self.make_request(route['method'], url, data=transaction_data, headers=headers)
-        return self.process_response(resp)
+    def get_bank_public_key(self):
+        """Fetch the banking API public key (PEM format)."""
+        url = self.routing_table.get('public_key', 'http://localhost:8001/public-key')
+        result, status = self.send_request("GET", url)
+        if status != 200:
+            raise ValueError(f"Failed to fetch public key from {url}: {status} {result}")
+        key_pem = result.get('public_key')
+        if not key_pem:
+            raise ValueError("Banking API public key not found in response")
+        return key_pem  # Return PEM string directly
 
 class DownstreamServiceManager:
     def __init__(self):
         self.handler = DownstreamServiceHandler()
 
-    def route_transaction(self, transaction_components: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
-        return self.handler.forward_transaction(
-            target_key=transaction_components.get('target'),
-            transaction_data=transaction_components.get('transaction_data', {}),
-            url_params=transaction_components.get('url_params')
-        )
+    def route_transaction(self, payload, url, method="POST", headers=None):
+        return self.handler.send_request(method, url, payload, headers=headers)
