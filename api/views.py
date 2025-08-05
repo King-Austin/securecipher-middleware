@@ -5,8 +5,12 @@ from django.conf import settings
 from api.models import MiddlewareKey, UsedNonce
 
 from scripts import generate_keypair 
-from .crypto_utils import CryptoHandler, TransactionProcessor
-from .downstream_handler import DownstreamServiceManager
+from .crypto_utils import CryptoHandler
+from .downstream_handler import (
+    send_downstream_request,
+    get_bank_public_key,
+    get_target_url
+)
 import traceback
 import time
 import base64
@@ -74,53 +78,54 @@ def secure_gateway(request):
         print("DEBUG: Payload decrypted.")
 
         # --- Step 4: Extract and validate inner payload fields ---
+        target_url = inner_payload.get("target")
         transaction_data = inner_payload.get("transaction_data")
         client_signature = inner_payload.get("client_signature")
         client_public_key_b64 = inner_payload.get("client_public_key")
-        timestamp = inner_payload.get("timestamp")
         nonce = inner_payload.get("nonce")
 
         #---- Check for required fields ---
-        if not nonce or not timestamp:
-            raise ValueError("Nonce and timestamp are required.")
+        if not nonce:
+            raise ValueError("Nonce is required.")
         if UsedNonce.objects.filter(nonce=nonce).exists():
             raise ValueError("Replay attack detected: nonce already used.")
-        if time.time() - timestamp > 300:
-            raise ValueError("Replay attack detected: timestamp is too old.")
         UsedNonce.objects.create(nonce=nonce)
 
         # --- Step 5: Verify client signature ---
-        def verify_ecdsa_signature(payload_dict, signature_b64, public_key_b64_or_pem):
-            try:
-                # Try to load as PEM first
-                if "-----BEGIN PUBLIC KEY-----" in public_key_b64_or_pem:
-                    public_key = serialization.load_pem_public_key(public_key_b64_or_pem.encode())
-                else:
-                    # Otherwise, treat as base64 DER
-                    public_key_der = base64.b64decode(public_key_b64_or_pem)
-                    public_key = serialization.load_der_public_key(public_key_der)
-                signature = base64.b64decode(signature_b64)
-                print("DEBUG: [VERIFY] Signature (base64):", signature_b64)
-                message = json.dumps(payload_dict, separators=(',', ':'), sort_keys=True).encode()
-                print("DEBUG: [VERIFY] Canonical JSON to verify:", message.decode())
-                hash_hex = hashlib.sha256(message).hexdigest()
-                print("DEBUG: [VERIFY] data hash:", hash_hex)
-                print("===============================================================")
+        from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 
-                print("DEBUG: [VERIFY] Signature (base64):", signature_b64)
-                print("===============================================================")
-                print("DEBUG: [VERIFY] Public key (PEM or b64):", public_key_b64_or_pem)
-                print("===============================================================")
-                public_key.verify(signature, message, ec.ECDSA(hashes.SHA256()))
+        def verify_ecdsa_signature(payload_dict, signature_b64, public_key_str):
+            try:
+                # Load public key (PEM or DER)
+                if "-----BEGIN PUBLIC KEY-----" in public_key_str:
+                    public_key = serialization.load_pem_public_key(public_key_str.encode())
+                else:
+                    public_key = serialization.load_der_public_key(base64.b64decode(public_key_str))
+
+                # Canonical JSON
+                message = json.dumps(payload_dict, separators=(',', ':'), sort_keys=True).encode()
+                signature_bytes = base64.b64decode(signature_b64)
+
+                print("DEBUG: Canonical JSON:", message.decode())
+                print("DEBUG: SHA-256:", hashlib.sha256(message).hexdigest())
+                print("DEBUG: Signature Length:", len(signature_bytes), "bytes")
+
+                # 🔥 Convert raw (r||s) to DER if needed
+                if len(signature_bytes) == 96:  # P-384 raw signature length
+                    r = int.from_bytes(signature_bytes[:48], byteorder='big')
+                    s = int.from_bytes(signature_bytes[48:], byteorder='big')
+                    signature_bytes = encode_dss_signature(r, s)
+
+                # Verify DER signature
+                public_key.verify(signature_bytes, message, ec.ECDSA(hashes.SHA256()))
+                print("DEBUG: ✅ Signature verified successfully.")
                 return True
             except Exception as e:
-                print(f"Signature verification failed: {e}")
+                print(f"DEBUG: ❌ Signature verification failed: {e}")
                 return False
 
         sign_payload_dict = {
             "transaction_data": transaction_data,
-            "timestamp": timestamp,
-            "nonce": nonce
         }
         if not verify_ecdsa_signature(sign_payload_dict, client_signature, client_public_key_b64):
             error_response = {"error": "Client signature verification failed"}
@@ -155,7 +160,6 @@ def secure_gateway(request):
             "client_public_key": client_public_key_b64,
             "middleware_signature": middleware_signature,
             "middleware_public_key": middleware_public_key_der,
-            "timestamp": timestamp,
             "nonce": nonce
         }
 
@@ -168,7 +172,7 @@ def secure_gateway(request):
         )
 
         # Get bank public key (PEM) and load it
-        bank_public_key_pem = DownstreamServiceManager.get_bank_public_key()
+        bank_public_key_pem = get_bank_public_key()
         bank_public_key = serialization.load_pem_public_key(bank_public_key_pem.encode())
 
         # Derive session key for downstream (P-384, SHA-384, info, salt)
@@ -195,9 +199,9 @@ def secure_gateway(request):
         }
 
         # --- Step 8: Route to downstream using ROUTING_TABLE from settings ---
-        downstream_url = get_route_from_request(request)
-        response_data, status_code = DownstreamServiceManager.route_transaction(
-            downstream_envelope, downstream_url
+        downstream_url = get_target_url(target_url)
+        response_data, status_code = send_downstream_request(
+            "POST", downstream_url, data=downstream_envelope
         )
 
         # --- Step 9: Decrypt banking API response and verify signature ---

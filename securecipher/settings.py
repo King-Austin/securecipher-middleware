@@ -172,8 +172,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Define routing table for downstream services
 ROUTING_TABLE = {
-    "register": "http://localhost:8001/api/register/",
-    "validate_account": "http://localhost:8001/api/validate_account/",
-    "transfer": "http://localhost:8001/api/transfer/",
-    "public_key": "http://localhost:8001/api/public-key/",
+    "register": "http://localhost:8001/register/",
+    "validate_account": "http://localhost:8001/validate_account/",
+    "transfer": "http://localhost:8001/transfer/",
+    "public_key": "http://localhost:8001/public-key/",
 }
