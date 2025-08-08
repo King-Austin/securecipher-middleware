@@ -1,27 +1,28 @@
 import os
+import base64
+import json
+import hashlib
+import traceback
+import time
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.conf import settings
-from api.models import MiddlewareKey, UsedNonce
 
-from scripts import generate_keypair 
+from api.models import MiddlewareKey, UsedNonce
+from scripts import generate_keypair
 from .crypto_utils import CryptoHandler
 from .downstream_handler import (
     send_downstream_request,
     get_bank_public_key,
     get_target_url
 )
-import traceback
-import time
-import base64
-import json
+
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-import os
-import hashlib
-
+from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 
 
 def get_or_create_active_key():
@@ -33,12 +34,50 @@ def get_or_create_active_key():
         generate_keypair.generate()
         return MiddlewareKey.objects.get(label="active")
 
+
+def verify_signature(payload_dict, signature_b64, public_key_str):
+    """
+    Unified ECDSA signature verification for both PEM and DER/BASE64 public keys.
+    """
+    try:
+        # Load public key (PEM or DER/BASE64)
+        if "-----BEGIN PUBLIC KEY-----" in public_key_str:
+            public_key = serialization.load_pem_public_key(public_key_str.encode())
+        else:
+            public_key = serialization.load_der_public_key(base64.b64decode(public_key_str))
+
+        # Canonical JSON encoding
+        message = json.dumps(payload_dict, separators=(',', ':'), sort_keys=True).encode()
+        signature_bytes = base64.b64decode(signature_b64)
+
+        # If signature is raw (r||s), convert to DER
+        if len(signature_bytes) == 96:
+            r = int.from_bytes(signature_bytes[:48], byteorder='big')
+            s = int.from_bytes(signature_bytes[48:], byteorder='big')
+            signature_bytes = encode_dss_signature(r, s)
+
+        public_key.verify(signature_bytes, message, ec.ECDSA(hashes.SHA256()))
+        return True
+    except Exception as e:
+        print(f"DEBUG: Signature verification failed: {e}")
+        return False
+
+
+def sign_payload(payload_dict, private_key_pem:str):
+    private_key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
+    message = json.dumps(payload_dict, separators=(',', ':'), sort_keys=True).encode()
+    signature = private_key.sign(message, ec.ECDSA(hashes.SHA256()))
+    return base64.b64encode(signature).decode()
+
+
+
 @api_view(["GET"])
 def get_public_key(request):
     print("DEBUG: Client requesting server public key...")
     middleware_key = get_or_create_active_key()
     print(f"DEBUG: Server public key retrieved: {middleware_key.public_key_pem[:50]}...")
     return Response({"public_key": middleware_key.public_key_pem})
+
 
 @api_view(["POST"])
 def secure_gateway(request):
@@ -81,7 +120,7 @@ def secure_gateway(request):
         aesgcm = AESGCM(session_key)
         iv = base64.b64decode(iv_b64)
         ciphertext = base64.b64decode(ciphertext_b64)
-        print(f"DEBUG: [STEP 3] IV: {iv.hex()}, Ciphertext: {ciphertext.hex()}")
+        print(f"DEBUG: [STEP 3] IV in Hex: {iv.hex()},\n Ciphertext in Hex: {ciphertext.hex()}")
         decrypted_bytes = aesgcm.decrypt(iv, ciphertext, None)
         print(f"DEBUG: [STEP 3] Decrypted bytes: {decrypted_bytes}")
         inner_payload = json.loads(decrypted_bytes.decode())
@@ -107,39 +146,10 @@ def secure_gateway(request):
 
         # --- Step 5: Verify client signature ---
         print("DEBUG: [STEP 5] Verifying client signature...")
-        from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
-
-        def verify_ecdsa_signature(payload_dict, signature_b64, public_key_str):
-            try:
-                print("DEBUG: [STEP 5] Loading client public key...")
-                if "-----BEGIN PUBLIC KEY-----" in public_key_str:
-                    public_key = serialization.load_pem_public_key(public_key_str.encode())
-                else:
-                    public_key = serialization.load_der_public_key(base64.b64decode(public_key_str))
-
-                message = json.dumps(payload_dict, separators=(',', ':'), sort_keys=True).encode()
-                signature_bytes = base64.b64decode(signature_b64)
-
-                print("DEBUG: [STEP 5] Canonical JSON:", message.decode())
-                print("DEBUG: [STEP 5] SHA-256:", hashlib.sha256(message).hexdigest())
-                print("DEBUG: [STEP 5] Signature Length:", len(signature_bytes), "bytes")
-
-                if len(signature_bytes) == 96:
-                    r = int.from_bytes(signature_bytes[:48], byteorder='big')
-                    s = int.from_bytes(signature_bytes[48:], byteorder='big')
-                    signature_bytes = encode_dss_signature(r, s)
-
-                public_key.verify(signature_bytes, message, ec.ECDSA(hashes.SHA256()))
-                print("DEBUG: [STEP 5] ✅ Signature verified successfully.")
-                return True
-            except Exception as e:
-                print(f"DEBUG: [STEP 5] ❌ Signature verification failed: {e}")
-                return False
-
         sign_payload_dict = {
             "transaction_data": transaction_data,
         }
-        if not verify_ecdsa_signature(sign_payload_dict, client_signature, client_public_key_b64):
+        if not verify_signature(sign_payload_dict, client_signature, client_public_key_b64):
             print("DEBUG: [STEP 5] Client signature verification failed.")
             error_response = {"error": "Client signature verification failed"}
             error_bytes = json.dumps(error_response).encode()
@@ -150,16 +160,12 @@ def secure_gateway(request):
                 "ciphertext": base64.b64encode(error_ciphertext).decode()
             }
             return Response(encrypted_response, status=400)
+        
+        
         print("DEBUG: [STEP 5] Client signature verified.")
 
         # --- Step 6: Add middleware signature/public key ---
         print("DEBUG: [STEP 6] Adding middleware signature and public key...")
-        def sign_payload(payload_dict, private_key_pem):
-            private_key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
-            message = json.dumps(payload_dict, separators=(',', ':'), sort_keys=True).encode()
-            signature = private_key.sign(message, ec.ECDSA(hashes.SHA256()))
-            return base64.b64encode(signature).decode()
-
         forwarded_payload = {
             "transaction_data": transaction_data,
             "client_signature": client_signature,
@@ -252,7 +258,7 @@ def secure_gateway(request):
                     "nonce": response_payload.get("nonce")
                 }
                 print(f"DEBUG: [STEP 9] Verifying banking API signature...")
-                if not verify_banking_api_signature(verify_payload_dict, bank_signature, bank_public_key):
+                if not verify_signature(verify_payload_dict, bank_signature, bank_public_key):
                     print("DEBUG: [STEP 9] Banking API signature verification failed.")
                     error_response = {"error": "Banking API signature verification failed"}
                     encrypted_response = CryptoHandler.encrypt_response(error_response, session_key)

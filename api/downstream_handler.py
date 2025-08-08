@@ -11,28 +11,23 @@ def send_downstream_request(method, url, data=None, headers=None, timeout=30, ma
         'User-Agent': 'SecureCipher-Middleware/1.0',
         'X-Forwarded-By': 'SecureCipher'
     }
-    last_exception = None
-    for attempt in range(max_retries):
+    try:
+        print(f"DEBUG: {method} {url}")
+        resp = requests.request(
+            method=method.upper(),
+            url=url,
+            json=data,
+            headers=headers,
+            timeout=timeout
+        )
+        print(f"DEBUG: Downstream status: {resp.status_code}")
         try:
-            print(f"DEBUG: {method} {url} | Attempt {attempt+1}")
-            resp = requests.request(
-                method=method.upper(),
-                url=url,
-                json=data,
-                headers=headers,
-                timeout=timeout
-            )
-            print(f"DEBUG: Downstream status: {resp.status_code}")
-            try:
-                return resp.json(), resp.status_code
-            except ValueError:
-                return {'error': 'Invalid JSON from downstream', 'raw_response': resp.text[:500]}, resp.status_code
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.RequestException) as e:
-            last_exception = e
-            print(f"DEBUG: Downstream request error: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
-    raise ValueError(f"Downstream service failed after {max_retries} attempts: {last_exception}")
+            return resp.json(), resp.status_code
+        except ValueError:
+            return {'error': 'Invalid JSON from downstream', 'raw_response': resp.text[:500]}, resp.status_code
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.RequestException) as e:
+        print(f"DEBUG: Downstream request error: {e}")
+        return {'error': str(e)}, 503
 
 def get_bank_public_key():
     routing_table = get_routing_table()
